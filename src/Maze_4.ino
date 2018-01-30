@@ -44,15 +44,19 @@ void setup() {
 int phase = 1; //1 ist discovery mode, 2 ist logical search
 
 void loop() {
+  //erste tests damit sich der Roboter immer rechts hält
   if(phase==1){
+    //Auslesen der Ultraschallsensoren (nowC ist der Mittlere)
     byte nowC=0;
     brm.readSonars(&sonarL,&nowC,&sonarR);
+    //checken ob rechts eine Wand ist
     if(getSideDist()>20){
       one.move(20,-20);
       delay(600);
       one.stop();
       moveOneSquare();
     }else{
+      //checken ob vor dem ROboter eine Wand liegt
       if(nowC<10){
         one.move(20,-20);
         delay(600);
@@ -66,31 +70,16 @@ void loop() {
 }
 
 
-void wall(){
-  byte bwallL;
-  byte bwallR;
-  brm.readSonars(&bwallL,&sonarC,&bwallR);
-  int wallL = (int) bwallL;
-  int wallR = (int) bwallR;
-
-  if (wallL < 90 && wallR < 90){
-    one.lcd1("Ueberall Waende.");
-  }else if (wallR > 90){
-    one.lcd1("Keine Wand rechts.");
-  }else if (wallL > 90){
-    one.lcd1("Keine Wand links.");
-  }
-}
-
-
-
+//Ein Feld nach vorne bewegen
 void moveOneSquare(){
+  //Sensoren einlesen
   byte nowC=0;
   brm.readSonars(&sonarL,&nowC,&sonarR);
   int now = (int)nowC;
-  int finish = now - 30;
+  int finish = now - 30; //Feldgröße = 30 cm
   one.move(20,20);
   while(true){
+    //aktualisieren der Sensoren
     byte nowC=0;
     brm.readSonars(&sonarL,&nowC,&sonarR);
     int now = (int)nowC;
@@ -98,10 +87,12 @@ void moveOneSquare(){
       break;
     }
   }
-  //Sone.stop();
+  //one.stop();
 }
 
+//Halbes Feld nach vorne bewegen
 void moveHalfSquare(){
+  //Sensoren einlesen
   byte nowC=0;
   brm.readSonars(&sonarL,&nowC,&sonarR);
   int now = (int)nowC;
@@ -119,6 +110,7 @@ void moveHalfSquare(){
   one.stop();
 }
 
+//drehen des Roboters mit hilfe des Gyroskops
 void turn(int degree){
   float now = read_bearing();
   float finish = now + degree;
@@ -145,8 +137,10 @@ void turn(int degree){
   }
 }
 
+//gibt true zurück wenn der Roboter einen schwarzen Untergrund sieht
 bool backInBlack()
 {
+  //Einlesen der RGB Sensoren
   byte rgbL[3]={0,0,0};
   byte rgbR[3]={0,0,0};
   brm.readRgbL(&rgbL[0],&rgbL[1],&rgbL[2]);
@@ -160,8 +154,10 @@ bool backInBlack()
   }
 }
 
-bool theSilverSurver()
+//gibt true zurück wenn der Robter auf einen Silbernen Untergrund steht
+bool onSilver()
 {
+  //Einlesen der RGB Sensoren
   byte rgbL[3]={0,0,0};
   byte rgbR[3]={0,0,0};
   brm.readRgbL(&rgbL[0],&rgbL[1],&rgbL[2]);
@@ -175,6 +171,7 @@ bool theSilverSurver()
   }
 }
 
+//Helpercode zum auslesen des Gyroscops
 float read_bearing()
 {
 byte highByte, lowByte;    // highByte and lowByte store the bearing and fine stores decimal place of bearing
@@ -191,7 +188,7 @@ byte highByte, lowByte;    // highByte and lowByte store the bearing and fine st
 return (float)((highByte<<8)+lowByte)/10;
 }
 
-
+//Helpercode zum Calibrieren den Gyroscops
 void calibrateCMPS11()
 {
    one.move(-30,30); // Slowly rotate the compass on the horizontal plane in all directions
@@ -226,6 +223,7 @@ void calibrateCMPS11()
 
 }
 
+//Gibt die Distance zu der Rechten Seite des ROboters zurück
 int getSideDist()                              // a low pull on pin COMP/TRIG  triggering a sensor reading
 {
   Serial.print("Distance Measured=");
