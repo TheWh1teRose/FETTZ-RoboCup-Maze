@@ -13,12 +13,18 @@ BnrRescue brm;
 int URECHO = 3;         // PWM Output 0-25000US,Every 50US represent 1cm
 int URTRIG = 5;         // PWM trigger pin
 int sensorPin = A0;     // select the input pin for the potentiometer
+int URECHO2 = 2;         // PWM Output 0-25000US,Every 50US represent 1cm
+int URTRIG2 = 6;         // PWM trigger pin
+int sensorPin2 = A1;     // select the input pin for the potentiometer
 int sensorValue = 0;    // variable to store the value coming from the sensor
 
 byte sonarL=0, sonarC=0, sonarR=0;
 byte rgbL[3]={0,0,0};
 byte rgbR[3]={0,0,0};
 int  lenghtSquare = 32;
+
+int sensorFArray[] = {0,0,0,0,0};
+int sensorHArray[] = {0,0,0,0,0};
 
 void setup() {
   // put your setup code here, to run once:
@@ -33,12 +39,18 @@ void setup() {
   pinMode(URTRIG,OUTPUT);                    // A low pull on pin COMP/TRIG
   digitalWrite(URTRIG,HIGH);                 // Set to HIGH
   pinMode(URECHO, INPUT);
+  pinMode(URTRIG2,OUTPUT);                    // A low pull on pin COMP/TRIG
+  digitalWrite(URTRIG2,HIGH);                 // Set to HIGH
+  pinMode(URECHO2, INPUT);
 
   //calibrateCMPS11();
-  while(one.readButton()!=1){
-    delay(50);
+  Serial.println(one.readButton());
+  for(int i = 0; i<5; i++){
+    Serial.print("Test1");
+    updateSensorArray(sensorFArray, 0);
+    updateSensorArray(sensorHArray, 1);
+    one.lcd1((int) getDistanceFromSensorArray(sensorFArray));
   }
-
 }
 
 int phase = 1; //1 ist discovery mode, 2 ist logical search
@@ -47,28 +59,57 @@ void loop() {
   //erste tests damit sich der Roboter immer rechts hält
   if(phase==1){
     //Auslesen der Ultraschallsensoren (nowC ist der Mittlere)
-    byte nowC=0;
-    brm.readSonars(&sonarL,&nowC,&sonarR);
-    //checken ob rechts eine Wand ist
-    if(getSideDist()>20){
-      one.move(20,-20);
-      delay(600);
-      one.stop();
-      moveOneSquare();
-    }else{
-      //checken ob vor dem ROboter eine Wand liegt
-      if(nowC<10){
-        one.move(20,-20);
-        delay(600);
-        one.stop();
-      }else{
-        moveOneSquare();
-      }
-    }
+    moveOneSquare();
+
   }
-  delay(100);
+  delay(2500);
 }
 
+//Ausrichten an Wänden
+void syncPosition(){
+  int distF = getSideDistF();
+  int distH = getSideDistH();
+
+
+}
+
+//Updaten des Sensor Arrays um später Outlier zu eliminieren
+void updateSensorArray(int sensorArray[], int frontOrHeck){
+  int newArray[] = {0,0,0,0,0};
+
+  for(int i = 0;i<4;i++){
+    newArray[i] = sensorArray[i+1];
+  }
+
+  if(frontOrHeck == 0){
+    newArray[4] = getSideDistF();
+    for(int i = 0; i<5; i++){
+      sensorFArray[i] = newArray[i];
+    }
+
+  }else{
+    newArray[4] = getSideDistH();
+    for(int i = 0; i<5; i++){
+      sensorHArray[i] = newArray[i];
+    }
+  }
+
+
+}
+
+int getDistanceFromSensorArray(int sensorArray[]){
+  int sum = 0;
+  int count = 0;
+
+  for(int i = 0;i<5;i++){
+    if(sensorArray[i] != 0){
+      sum += sensorArray[i];
+      count++;
+    }
+  }
+
+  return sum / count;
+}
 
 //Ein Feld nach vorne bewegen
 void moveOneSquare(){
@@ -174,7 +215,7 @@ bool onSilver()
 //Helpercode zum auslesen des Gyroscops
 float read_bearing()
 {
-byte highByte, lowByte;    // highByte and lowByte store the bearing and fine stores decimal place of bearing
+  byte highByte, lowByte;    // highByte and lowByte store the bearing and fine stores decimal place of bearing
 
    Wire.beginTransmission(ADDRESS);           //start communication with CMPS10
    Wire.write(2);                             //Send the register we wish to start reading from
@@ -185,7 +226,7 @@ byte highByte, lowByte;    // highByte and lowByte store the bearing and fine st
    highByte = Wire.read();
    lowByte = Wire.read();
 
-return (float)((highByte<<8)+lowByte)/10;
+   return (float)((highByte<<8)+lowByte)/10;
 }
 
 //Helpercode zum Calibrieren den Gyroscops
@@ -224,7 +265,7 @@ void calibrateCMPS11()
 }
 
 //Gibt die Distance zu der Rechten Seite des ROboters zurück
-int getSideDist()                              // a low pull on pin COMP/TRIG  triggering a sensor reading
+int getSideDistF()                              // a low pull on pin COMP/TRIG  triggering a sensor reading
 {
   Serial.print("Distance Measured=");
   digitalWrite(URTRIG, LOW);
@@ -246,6 +287,41 @@ int getSideDist()                              // a low pull on pin COMP/TRIG  t
   }
   else {
     sensorValue = analogRead(sensorPin);
+    if(sensorValue<=10)                   // the reading is invalid.
+    {
+      Serial.print("Invalid");
+    }
+    else {
+    sensorValue = sensorValue*0.718;
+    Serial.print(sensorValue);
+    Serial.println("cm");
+    }
+  }
+  return DistanceMeasured;
+}
+
+int getSideDistH()                              // a low pull on pin COMP/TRIG  triggering a sensor reading
+{
+  Serial.print("Distance Measured=");
+  digitalWrite(URTRIG2, LOW);
+  digitalWrite(URTRIG2, HIGH);               // reading Pin PWM will output pulses
+
+  unsigned int DistanceMeasured= 0;
+  if( Measure)
+  {
+    unsigned long LowLevelTime = pulseIn(URECHO2, LOW) ;
+    if(LowLevelTime>=45000)                 // the reading is invalid.
+    {
+      Serial.print("Invalid");
+    }
+    else{
+    DistanceMeasured = LowLevelTime /50;   // every 50us low level stands for 1cm
+    Serial.print(DistanceMeasured);
+    Serial.println("cm");
+  }
+  }
+  else {
+    sensorValue = analogRead(sensorPin2);
     if(sensorValue<=10)                   // the reading is invalid.
     {
       Serial.print("Invalid");
