@@ -1,19 +1,32 @@
 #include <BnrOneA.h>   // Bot'n Roll ONE A library
+#include <EEPROM.h>    // EEPROM reading and writing
 #include <SPI.h>       // SPI communication library required by BnrOne.cpp
 #include <BnrRescue.h>
 #include <Wire.h>
+#include <math.h>
 #include <Ultrasonic.h>
-
 BnrOneA one;
 BnrRescue brm;
 
 #define MODULE_ADDRESS 0x2C
 #define SSPIN  2
 #define ADDRESS 0x60
+#define  Measure  1     //Mode select
+int URECHO = 3;         // PWM Output 0-25000US,Every 50US represent 1cm
+int URTRIG = 5;         // PWM trigger pin
+int sensorPin = A0;     // select the input pin for the potentiometer
+int URECHO2 = 2;         // PWM Output 0-25000US,Every 50US represent 1cm
+int URTRIG2 = 6;         // PWM trigger pin
+int sensorPin2 = A1;     // select the input pin for the potentiometer
+int sensorValue = 0;    // variable to store the value coming from the sensor
 
 byte sonarL=0, sonarC=0, sonarR=0;
 byte rgbL[3]={0,0,0};
 byte rgbR[3]={0,0,0};
+int  lenghtSquare = 32;
+
+int sensorFArray[] = {0,0,0,0,0};
+int sensorHArray[] = {0,0,0,0,0};
 
 #define SUR_TEMP_PIN A0 // Analog input pin connect to temperature sensor SUR pin
 #define OBJ_TEMP_PIN A1 // Analog input pin connect to temperature sensor OBJ pin
@@ -65,14 +78,8 @@ float obj [13][12]={
 /*12*/            { 5.29,5.076,4.83,4.549,4.231,3.872,3.47,3.023,2.527,1.98,1.379,0.72}
 };
 
-
 Ultrasonic urR(7);
 Ultrasonic urL(6);
-
-int moveVel = 8;
-float moveFac = 2.5;
-int TurnArray [4] = {0,0,0,0};
-
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(57600);     // set baud rate to 57600bps for printing values at serial monitor.
@@ -86,7 +93,7 @@ void setup() {
   analogReference(INTERNAL);//set the refenrence voltage 1.1V,the distinguishability can up to 1mV.
 Serial.println("Setup finish");
 directions();
-one.lcd2("   Press PB2   ");
+one.lcd1("   Press PB2   ");
 while(one.readButton()!=2){
   delay(50);
 }
@@ -94,83 +101,73 @@ while(one.readButton()!=2){
 }
 
 int phase = 1; //1 ist discovery mode, 2 ist logical search
-int now = 0;
 
 void loop() {
   int distR = int(urR.MeasureInCentimeters());
   int distL = int(urL.MeasureInCentimeters());
   int distC = getCDist();
-  //Serial.println("##########################NEW LOOP##########################");
-  //Serial.println("Richtungen: " + String(TurnArray[0]) + "; " + String(TurnArray[1]) + "; " + String(TurnArray[2]) + "; " + String(TurnArray[3]));
-  //Serial.println("C: " + String(distC) + "; L: " + String(distL) + "; R: " + String(distR) + "; CMP11: " + String(read_bearing()));
-  moveOneSquare(); 
-  one.stop();
+  Serial.println("L: " + String(distL) + "C: " + String(distC) + "R: " + String(distR));
+  if(distR>20){
+    distL = int(urL.MeasureInCentimeters());
+    turnright();
+    if(distL < 15){
+      one.move(-15,-25);
+      delay(1500);
+      one.move(10,25);
+      delay(1500);
+    }
+    distC = getCDist();
+    one.move(10,25);
+    delay(1500);
+    moveOneSquare(30);
+  }else{
+    if(getCDist() < 10){
+      turnright();
+      turnright();
+      turnright();
+    }
+    moveOneSquare(30);
+  }
+  
 }
 
-//Ein Feld nach vorne bewegen xD
-void moveOneSquare(){
-  //Serial.println("Void loop 2.0");
+//Ein Feld nach vorne bewegen
+void moveOneSquare(int moveDist){
   //Sensoren einlesen
-  now = getCDist();
+  int now = getCDist();
+  int finish = now - moveDist; //Feldgröße = 30 cm
+  one.lcd1(finish);
+  one.lcd2(now);
   while(true){
     //aktualisieren der Sensoren
     now = getCDist();
-    one.lcd2(measureSurTemp());
-    one.lcd1(measureObjectTemp());
     delay(50);
-    if(now<=8 || now == 200){
-      //Serial.println("Stop vor Wand");
-      one.stop();    
-    }
-    if (onSilver()){
-      //Serial.println("onSilver");
-      //one.lcd2("checked on silver");
+    one.lcd1(finish);
+    one.lcd2(now);
+    if(now<=finish || now<=5){
       one.stop();
-      one.led(HIGH);
-      delay(2000);
-      one.led(LOW);
+      break;
     }
-    if (backInBlack()){
-      //Serial.println("backInBlack");
-      one.move(-moveVel,-moveVel*moveFac);
-      delay(1000);
-      one.stop();
-      if(int(urL.MeasureInCentimeters()) > 20){
-        //Serial.println("backInBlack: links frei");
-        turnleft();
-        }
-        else{
-          //Serial.println("backInBlack: links zu");
-          turnright();
-          if(int(urR.MeasureInCentimeters()) > 20){
-            //Serial.println("backInBlack: links zu -> rechts offen");
-            turnright();
-            }          
-          }
-      }
     if(int(urR.MeasureInCentimeters()) > 20){
-      //Serial.println("Rechts drehen");
-      one.move(moveVel,moveVel*moveFac);
+      one.move(10,25);
       delay(400);
       one.stop();
       turnright();
 
-      one.move(moveVel,moveVel*moveFac);
+      int distL = int(urL.MeasureInCentimeters());
+      if(distL < 15){
+      one.move(-15,-25);
+      delay(1500);
+      one.move(10,25);
+      delay(1500);
+    }else{
+      one.move(10,25);
       delay(1500);
       one.stop();
-      break;
     }
-    if(getCDist() < 8 && int(urR.MeasureInCentimeters()) < 20){
-      turnleft();
+    break;
     }
-    if (measureObjectTemp() >= 16){
-      delay(200);
-      one.stop();
-      medkit();
-      
-      }
-    one.move(moveVel,moveVel*moveFac);
-    delay(50);
+    one.move(10,25);
   }
   one.stop();
 }
@@ -187,10 +184,13 @@ int getCDist(){
 bool backInBlack()
 {
   //Einlesen der RGB Sensoren
+  byte rgbL[3]={0,0,0};
+  byte rgbR[3]={0,0,0};
+  brm.readRgbL(&rgbL[0],&rgbL[1],&rgbL[2]);
   brm.readRgbR(&rgbR[0],&rgbR[1],&rgbR[2]);
 
   //one.lcd1((int)rgbR[0], (int)rgbR[1], (int)rgbR[2]);
-  if((int)rgbR[0] < 80){
+  if((int)rgbR[0] < 150){
     return true;
   }else{
     return false;
@@ -201,12 +201,13 @@ bool backInBlack()
 bool onSilver()
 {
   //Einlesen der RGB Sensoren
+  byte rgbL[3]={0,0,0};
+  byte rgbR[3]={0,0,0};
   brm.readRgbL(&rgbL[0],&rgbL[1],&rgbL[2]);
   brm.readRgbR(&rgbR[0],&rgbR[1],&rgbR[2]);
-  int ges = (int(rgbL[0]) + int(rgbL[0]) + int(rgbL[1]) + int(rgbL[2]) + int(rgbR[0]) + int(rgbR[1]) + int(rgbR[2]));
-  ges = ges*2;
-  //one.lcd1(ges);
-  if(ges > 1600){
+
+  //one.lcd1((int)rgbR[0], (int)rgbR[1], (int)rgbR[2]);
+  if((int)rgbR[0] < 253){
     return true;
   }else{
     return false;
@@ -214,8 +215,8 @@ bool onSilver()
 }
 
 
-// messen der Umgebungstemeratur
-float binSearch(long x)
+
+float binSearch(long x)// this function used for measure the surrounding temperature
 {
   int low,mid,high;
   low=0;
@@ -232,13 +233,12 @@ float binSearch(long x)
   return mid;
 }
 
-//x ist die Umgebungstemperatur, y die Objekttemperatur
-float arraysearch(float x,float y)
+float arraysearch(float x,float y)//x is the surrounding temperature,y is the object temperature
 {
   int i=0;
-  float tem_coefficient=100;//Vergrößerung um 100 
+  float tem_coefficient=100;//Magnification of 100 times  
   i=(x/10)+1;//Ambient temperature      
-  voltage=(float)y/tem_coefficient;//Orginal Spannung   
+  voltage=(float)y/tem_coefficient;//the original voltage   
   //Serial.print("sensor voltage:\t");    
   //Serial.print(voltage,5);  
   //Serial.print("V");      
@@ -257,7 +257,7 @@ float measureSurTemp()
   int signal=0;   
   tempValue=0;
 
-  for(i=0;i<10;i++)           
+  for(i=0;i<10;i++)       //    
   {     
     tempValue+= analogRead(SUR_TEMP_PIN);       
     delay(10);    
@@ -267,8 +267,8 @@ float measureSurTemp()
   R=2000000*temp/(2.50-temp);   
   signal=binSearch(R);    
   current_temp=signal-1+temp_calibration+(res[signal-1]-R)/(res[signal-1]-res[signal]);
-  //Serial.print("Surrounding temperature:");
-  //Serial.print(current_temp);
+  Serial.print("Surrounding temperature:");
+  Serial.print(current_temp);
   return current_temp;
 }
 
@@ -289,13 +289,22 @@ float measureObjectTemp()
   objtValue=objtValue/10;//Averaging processing     
   temp1=objtValue*1.1/1023;//+objt_calibration; 
   sur_temp=temp1-(reference_vol+offset_vol);             
-  //Serial.print("\t Sensor voltage:");   
-  //Serial.print(sur_temp,3); 
-  //Serial.print("V");  
+  Serial.print("\t Sensor voltage:");   
+  Serial.print(sur_temp,3); 
+  Serial.print("V");  
   array_temp=arraysearch(current_temp,sur_temp*1000);        
   temp2=current_temp;        
   temp1=(temperature_range*voltage)/(obj[array_temp+1][(int)(temp2/10)+1]-obj[array_temp][(int)(temp2/10)+1]);        
   final_temp=temp2+temp1;        
+  if((final_temp>100)||(final_temp<=-10))
+    {
+    Serial.println ("\t out of range!");
+    }
+  else
+    {
+      Serial.print("\t object temperature:");   
+      Serial.println(final_temp,2); 
+      }
   return final_temp;
 }
 
@@ -315,6 +324,7 @@ byte highByte, lowByte;    // highByte and lowByte store the bearing and fine st
 return (float)((highByte<<8)+lowByte)/10;
 }
 
+int TurnArray [4] = {0,0,0,0};
 void directions(){
   for (int i=0; i<4; i++){
     while (true){
@@ -323,7 +333,6 @@ void directions(){
           one.lcd1(TurnArray[0], TurnArray[1], TurnArray[2], TurnArray[3]);
           break;
           }
-          one.lcd2(read_bearing());
       }
       delay (250);
     }
@@ -334,30 +343,26 @@ void directions(){
 
 int count = 1;
 void turnright(){
-  //Serial.println("turnRight");
   int nowBearing = read_bearing();
   int finishBearing = TurnArray[count];
-  //one.lcd2(nowBearing, finishBearing);
+  one.lcd2(nowBearing, finishBearing);
 if (nowBearing < finishBearing){
     while (nowBearing < finishBearing){
     nowBearing = read_bearing();
-    one.move(moveVel*1.2,-moveVel*1.3);
-    //one.lcd2(nowBearing, finishBearing);
-    delay(100);
+    one.move(16,-16);
+    one.lcd2(nowBearing, finishBearing,1);
     }
   }
 else{
-while(nowBearing > finishBearing){
+while(nowBearing > 200){
   nowBearing = read_bearing();
-  one.move(moveVel*1.2,-moveVel*1.3);
-  //one.lcd2(nowBearing, finishBearing);
-  delay(100);
+  one.move(16,-16);
+  one.lcd2(nowBearing, finishBearing,2.1);
   }
 while (nowBearing < finishBearing){
   nowBearing = read_bearing();
-  one.move(moveVel*1.2,-moveVel*1.3);
-  //one.lcd2(nowBearing, finishBearing);
-  delay(100);
+  one.move(16,-16);
+  one.lcd2(nowBearing, finishBearing,2.2);
   }
     }
   one.stop();
@@ -368,40 +373,34 @@ while (nowBearing < finishBearing){
 }
 
 void turnleft(){
-  //Serial.println("turnLeft");
   int nowBearing = read_bearing();
-  int finishBearing = 0;
   if((count-2)<0){
     if(count==1){
-      finishBearing = TurnArray[3];
+      int finishBearing = TurnArray[3];
     }else{
-      finishBearing = TurnArray[2];
+      int finishBearing = TurnArray[2];
     }
-  }else{
-    finishBearing = TurnArray[count-2];
   }
-  //one.lcd2(nowBearing, finishBearing);
-if (nowBearing > finishBearing){
-    while (nowBearing > finishBearing){
+  int finishBearing = TurnArray[count-2];
+  one.lcd2(nowBearing, finishBearing);
+if (nowBearing < finishBearing){
+    while (nowBearing < finishBearing){
     nowBearing = read_bearing();
-    one.move(-moveVel*1.2,moveVel*1.3);
-    //one.lcd2(nowBearing, finishBearing);
-    delay(100);
+    one.move(16,-16);
+    one.lcd2(nowBearing, finishBearing,1);
     }
   }
 else{
-    while(nowBearing < finishBearing){
-      nowBearing = read_bearing();
-      one.move(-moveVel*1.2,moveVel*1.3);
-      //one.lcd2(nowBearing, finishBearing);
-      delay(100);
-      }
-    while(nowBearing > finishBearing){
-      nowBearing = read_bearing();
-      one.move(-moveVel*1.2,moveVel*1.3);
-      //one.lcd2(nowBearing, finishBearing);
-      delay(100);
-      }
+while(nowBearing > 200){
+  nowBearing = read_bearing();
+  one.move(16,-16);
+  one.lcd2(nowBearing, finishBearing,2.1);
+  }
+while (nowBearing < finishBearing){
+  nowBearing = read_bearing();
+  one.move(16,-16);
+  one.lcd2(nowBearing, finishBearing,2.2);
+  }
     }
   one.stop();
   count = count - 1;
@@ -412,34 +411,6 @@ else{
     count = 3;
     }
 }
-
-
-void medkit(){          
-   one.lcd2("found dead body");
-   delay(1000);
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

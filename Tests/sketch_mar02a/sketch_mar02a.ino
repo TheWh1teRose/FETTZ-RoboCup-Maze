@@ -38,8 +38,8 @@ return (float)((highByte<<8)+lowByte)/10;
 
 void loop() {
   // put your main code here, to run repeatedly:
-turnright();
 delay (1500);
+turnright();
 }
 
 
@@ -51,10 +51,11 @@ void directions(){
     while (true){
         if (one.readButton() == 1){
           TurnArray[i] = read_bearing();
+          one.lcd1(TurnArray[0], TurnArray[1], TurnArray[2], TurnArray[3]);
           break;
           }
       }
-      delay (500);
+      delay (250);
     }
   one.lcd1(TurnArray[0], TurnArray[1], TurnArray[2], TurnArray[3]);
 }
@@ -65,10 +66,25 @@ int count = 1;
 void turnright(){
   int nowBearing = read_bearing();
   int finishBearing = TurnArray[count];
-  while (nowBearing < finishBearing){
+  one.lcd2(nowBearing, finishBearing);
+if (nowBearing < finishBearing){
+    while (nowBearing < finishBearing){
     nowBearing = read_bearing();
-    one.move(15,-15);
-    one.lcd2(nowBearing, finishBearing);
+    one.move(16,-16);
+    one.lcd2(nowBearing, finishBearing,1);
+    }
+  }
+else{
+while(nowBearing > 200){
+  nowBearing = read_bearing();
+  one.move(16,-16);
+  one.lcd2(nowBearing, finishBearing,2.1);
+  }
+while (nowBearing < finishBearing){
+  nowBearing = read_bearing();
+  one.move(16,-16);
+  one.lcd2(nowBearing, finishBearing,2.2);
+  }
     }
   one.stop();
   count = count + 1;
@@ -84,16 +100,7 @@ void turnright(){
 
 
 
-
-
-
-
-
-
-
-
-
-
+ 
 
 
 
