@@ -71,7 +71,10 @@ Ultrasonic urL(6);
 
 int moveVel = 8;
 float moveFac = 2.5;
+float FacL = 1.5;
+float FacR = 2;
 int TurnArray [4] = {0,0,0,0};
+float Temp = 18.35;
 
 void setup() {
   // put your setup code here, to run once:
@@ -102,9 +105,8 @@ void loop() {
   int distC = getCDist();
   //Serial.println("##########################NEW LOOP##########################");
   //Serial.println("Richtungen: " + String(TurnArray[0]) + "; " + String(TurnArray[1]) + "; " + String(TurnArray[2]) + "; " + String(TurnArray[3]));
-  //Serial.println("C: " + String(distC) + "; L: " + String(distL) + "; R: " + String(distR) + "; CMP11: " + String(read_bearing()));
+  Serial.println("C: " + String(distC) + "; L: " + String(distL) + "; R: " + String(distR) + "; CMP11: " + String(read_bearing()));
   moveOneSquare(); 
-  one.stop();
 }
 
 //Ein Feld nach vorne bewegen xD
@@ -119,58 +121,42 @@ void moveOneSquare(){
     one.lcd1(measureObjectTemp());
     delay(50);
     if(now<=8 || now == 200){
-      //Serial.println("Stop vor Wand");
+      Serial.println("Stop vor Wand");
       one.stop();    
     }
-    if (onSilver()){
-      //Serial.println("onSilver");
-      //one.lcd2("checked on silver");
-      one.stop();
-      one.led(HIGH);
-      delay(2000);
-      one.led(LOW);
-    }
-    if (backInBlack()){
-      //Serial.println("backInBlack");
-      one.move(-moveVel,-moveVel*moveFac);
-      delay(1000);
-      one.stop();
-      if(int(urL.MeasureInCentimeters()) > 20){
-        //Serial.println("backInBlack: links frei");
-        turnleft();
-        }
-        else{
-          //Serial.println("backInBlack: links zu");
-          turnright();
-          if(int(urR.MeasureInCentimeters()) > 20){
-            //Serial.println("backInBlack: links zu -> rechts offen");
-            turnright();
-            }          
-          }
-      }
+    ramp();
     if(int(urR.MeasureInCentimeters()) > 20){
-      //Serial.println("Rechts drehen");
+      Serial.println("Rechts drehen");
       one.move(moveVel,moveVel*moveFac);
-      delay(400);
+      delay(250);       
       one.stop();
       turnright();
-
       one.move(moveVel,moveVel*moveFac);
-      delay(1500);
+      for(int i = 0; i<30; i++){
+        delay(50);
+        backInBlack();
+        
+        } 
       one.stop();
       break;
     }
     if(getCDist() < 8 && int(urR.MeasureInCentimeters()) < 20){
       turnleft();
     }
-    if (measureObjectTemp() >= 16){
-      delay(200);
-      one.stop();
-      medkit();
-      
+    if (measureObjectTemp() >= Temp){
+      Serial.print("TMP: " + String(measureObjectTemp()));
+      medkit(); 
       }
-    one.move(moveVel,moveVel*moveFac);
-    delay(50);
+    backInBlack();
+    /*if (onSilver()){
+      //Serial.println("onSilver");
+      //one.lcd2("checked on silver");
+      one.stop();
+      one.led(HIGH);
+      delay(2000);
+      one.led(LOW);
+    }*/  
+    one.move(moveVel,moveVel*moveFac);  
   }
   one.stop();
 }
@@ -191,14 +177,27 @@ bool backInBlack()
 
   //one.lcd1((int)rgbR[0], (int)rgbR[1], (int)rgbR[2]);
   if((int)rgbR[0] < 80){
-    return true;
-  }else{
-    return false;
-  }
+    one.move(-moveVel,-moveVel*moveFac);
+      delay(1000);
+      one.stop();
+      if(int(urL.MeasureInCentimeters()) > 20){
+        //Serial.println("backInBlack: links frei");
+        turnleft();
+        }
+        else{
+          //Serial.println("backInBlack: links zu");
+          turnright();
+          if(int(urR.MeasureInCentimeters()) > 20){
+            //Serial.println("backInBlack: links zu -> rechts offen");
+            turnright();
+            }          
+          }
+  }      
 }
 
+
 //gibt true zurück wenn der Robter auf einen Silbernen Untergrund steht
-bool onSilver()
+/*bool onSilver()
 {
   //Einlesen der RGB Sensoren
   brm.readRgbL(&rgbL[0],&rgbL[1],&rgbL[2]);
@@ -211,7 +210,7 @@ bool onSilver()
   }else{
     return false;
   }
-}
+}*/
 
 
 // messen der Umgebungstemeratur
@@ -299,6 +298,23 @@ float measureObjectTemp()
   return final_temp;
 }
 
+
+char read_pitch()
+{
+char pitch;                // Store pitch values of CMPS10, chars are used because they support signed value
+
+   Wire.beginTransmission(ADDRESS);           //start communication with CMPS10
+   Wire.write(4);                             //Send the register we wish to start reading from
+   Wire.endTransmission();
+
+   Wire.requestFrom(ADDRESS, 1);              // Request 4 bytes from CMPS10
+   while(Wire.available() < 1);               // Wait for bytes to become available
+   pitch = Wire.read();
+
+return pitch;
+}
+
+
 float read_bearing()
 {
 byte highByte, lowByte;    // highByte and lowByte store the bearing and fine stores decimal place of bearing
@@ -341,7 +357,7 @@ void turnright(){
 if (nowBearing < finishBearing){
     while (nowBearing < finishBearing){
     nowBearing = read_bearing();
-    one.move(moveVel*1.2,-moveVel*1.3);
+    one.move(moveVel*FacL,-moveVel*FacR);
     //one.lcd2(nowBearing, finishBearing);
     delay(100);
     }
@@ -349,13 +365,13 @@ if (nowBearing < finishBearing){
 else{
 while(nowBearing > finishBearing){
   nowBearing = read_bearing();
-  one.move(moveVel*1.2,-moveVel*1.3);
+  one.move(moveVel*FacL,-moveVel*FacR);
   //one.lcd2(nowBearing, finishBearing);
   delay(100);
   }
 while (nowBearing < finishBearing){
   nowBearing = read_bearing();
-  one.move(moveVel*1.2,-moveVel*1.3);
+  one.move(moveVel*FacL,-moveVel*FacR);
   //one.lcd2(nowBearing, finishBearing);
   delay(100);
   }
@@ -368,7 +384,6 @@ while (nowBearing < finishBearing){
 }
 
 void turnleft(){
-  //Serial.println("turnLeft");
   int nowBearing = read_bearing();
   int finishBearing = 0;
   if((count-2)<0){
@@ -380,26 +395,25 @@ void turnleft(){
   }else{
     finishBearing = TurnArray[count-2];
   }
-  //one.lcd2(nowBearing, finishBearing);
 if (nowBearing > finishBearing){
-    while (nowBearing > finishBearing){
+    while (nowBearing > finishBearing+8){
     nowBearing = read_bearing();
-    one.move(-moveVel*1.2,moveVel*1.3);
-    //one.lcd2(nowBearing, finishBearing);
+    one.move(-moveVel*FacL,moveVel*FacR);
+    one.lcd2(nowBearing, finishBearing);
     delay(100);
     }
   }
 else{
     while(nowBearing < finishBearing){
       nowBearing = read_bearing();
-      one.move(-moveVel*1.2,moveVel*1.3);
-      //one.lcd2(nowBearing, finishBearing);
+      one.move(-moveVel*FacL,moveVel*FacR);
+      one.lcd2(nowBearing, finishBearing);
       delay(100);
       }
-    while(nowBearing > finishBearing){
+    while(nowBearing > finishBearing+8){
       nowBearing = read_bearing();
-      one.move(-moveVel*1.2,moveVel*1.3);
-      //one.lcd2(nowBearing, finishBearing);
+      one.move(-moveVel*FacL,moveVel*FacR);
+      one.lcd2(nowBearing, finishBearing);
       delay(100);
       }
     }
@@ -414,13 +428,26 @@ else{
 }
 
 
-void medkit(){          
+void medkit(){ 
+   delay(400);
+   one.stop();        
    one.lcd2("found dead body");
    delay(1000);
+   one.move(moveVel, moveVel*moveFac);
+   delay(500);
 }
 
 
-
+void ramp(){
+  int pitch = (int)read_pitch();
+  if(pitch<0){
+    while(pitch<0){
+      pitch = (int)read_pitch();
+      one.move(40,50);
+    }
+    one.stop();
+  }
+  }
 
 
 
